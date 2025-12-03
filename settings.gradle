@@ -1,3 +1,9 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+    }
+}
+
 include ':api'
 include ':util'
 include ':microservices:product-service'
