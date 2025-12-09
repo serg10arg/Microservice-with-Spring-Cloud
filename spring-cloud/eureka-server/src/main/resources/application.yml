@@ -1,12 +1,16 @@
 server:
-  port: 8761 # Puerto estándar de Eureka
+  port: 8761
+
+app:
+  eureka-username: u
+  eureka-password: p
 
 eureka:
   instance:
     hostname: localhost
   client:
-    registerWithEureka: false # No registrarse a sí mismo
-    fetchRegistry: false # No buscar otros registros
+    registerWithEureka: false
+    fetchRegistry: false
     serviceUrl:
       defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
   # from: https://github.com/spring-cloud-samples/eureka/blob/master/src/main/resources/application.yml
