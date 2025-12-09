@@ -20,7 +20,6 @@ public class HealthCheckConfiguration {
     private WebClient webClient;
 
     public HealthCheckConfiguration(WebClient.Builder webClientBuilder) {
-
         this.webClient = webClientBuilder.build();
     }
 
@@ -33,6 +32,7 @@ public class HealthCheckConfiguration {
         registry.put("recommendation",    () -> getHealth("http://recommendation"));
         registry.put("review",            () -> getHealth("http://review"));
         registry.put("product-composite", () -> getHealth("http://product-composite"));
+        registry.put("auth-server",       () -> getHealth("http://auth-server"));
 
         return CompositeReactiveHealthContributor.fromMap(registry);
     }
@@ -40,11 +40,7 @@ public class HealthCheckConfiguration {
     private Mono<Health> getHealth(String baseUrl) {
         String url = baseUrl + "/actuator/health";
         LOG.debug("Setting up a call to the Health API on URL: {}", url);
-        return webClient
-                .get()
-                .uri(url)
-                .retrieve()
-                .bodyToMono(String.class)
+        return webClient.get().uri(url).retrieve().bodyToMono(String.class)
                 .map(s -> new Health.Builder().up().build())
                 .onErrorResume(ex -> Mono.just(new Health.Builder().down(ex).build()))
                 .log(LOG.getName(), FINE);
