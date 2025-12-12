@@ -7,6 +7,8 @@ import static se.magnus.api.event.Event.Type.DELETE;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.net.URI;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -15,9 +17,13 @@ import org.springframework.cloud.stream.function.StreamBridge;
 import org.springframework.http.HttpStatus;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
+import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
@@ -31,6 +37,7 @@ import se.magnus.api.event.Event;
 import se.magnus.api.exceptions.InvalidInputException;
 import se.magnus.api.exceptions.NotFoundException;
 import se.magnus.util.http.HttpErrorInfo;
+import se.magnus.util.http.ServiceUtil;
 
 @Component
 public class ProductCompositeIntegration implements ProductService, RecommendationService, ReviewService {
@@ -46,17 +53,21 @@ public class ProductCompositeIntegration implements ProductService, Recommendati
     private final ObjectMapper mapper;
     private final StreamBridge streamBridge;
 
+    private final ServiceUtil serviceUtil;
+
     public ProductCompositeIntegration(
             @Qualifier("publishEventScheduler") Scheduler publishEventScheduler,
             WebClient.Builder webClientBuilder,
             ObjectMapper mapper,
-            StreamBridge streamBridge
+            StreamBridge streamBridge,
+            ServiceUtil serviceUtil
     ) {
         this.webClient = webClientBuilder.build();
 
         this.publishEventScheduler = publishEventScheduler;
         this.mapper = mapper;
         this.streamBridge = streamBridge;
+        this.serviceUtil = serviceUtil;
     }
 
     @Override
@@ -68,12 +79,33 @@ public class ProductCompositeIntegration implements ProductService, Recommendati
         }).subscribeOn(publishEventScheduler);
     }
 
+    @TimeLimiter(name = "product")
+    @CircuitBreaker(name = "product", fallbackMethod = "getProductFallbackValue")
     @Override
-    public Mono<Product> getProduct(int productId) {
-        String url = PRODUCT_SERVICE_URL + "/product/" + productId;
-        LOG.debug("Will call the getProduct API on URL: {}", url);
+    public Mono<Product> getProduct(int productId, int delay, int faultPercent) {
 
-        return webClient.get().uri(url).retrieve().bodyToMono(Product.class).log(LOG.getName(), FINE).onErrorMap(WebClientResponseException.class, ex -> handleException(ex));
+        URI url = UriComponentsBuilder.fromUriString(PRODUCT_SERVICE_URL
+                + "/product/{productId}?delay={delay}&faultPercent={faultPercent}").build(productId, delay, faultPercent);
+        LOG.debug("Will call the getProduct API on URL {}", url);
+
+        return webClient.get().uri(url)
+                .retrieve().bodyToMono(Product.class).log(LOG.getName(), FINE)
+                .onErrorMap(WebClientResponseException.class, ex -> handleException(ex));
+
+    }
+
+    private Mono<Product> getProductFallbackValue(int productId, int delay, int faultPercent, CallNotPermittedException ex) {
+
+        LOG.warn("Creating a fail-fast fallback product for productId = {}, delay = {}, faultPercent = {} and exception = {} ",
+                productId, delay, faultPercent, ex.toString());
+
+        if (productId == 13) {
+            String errMsg = "Product Id: " + productId + " not found in fallback cache!";
+            LOG.warn(errMsg);
+            throw new NotFoundException(errMsg);
+        }
+
+        return Mono.just(new Product(productId, "Fallback product" + productId, productId, serviceUtil.getServiceAddress()));
     }
 
     @Override
