@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cloud.stream.function.StreamBridge;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
@@ -41,170 +42,175 @@ import se.magnus.util.http.ServiceUtil;
 @Component
 public class ProductCompositeIntegration implements ProductService, RecommendationService, ReviewService {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ProductCompositeIntegration.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ProductCompositeIntegration.class);
 
-    private static final String PRODUCT_SERVICE_URL = "http://product";
-    private static final String RECOMMENDATION_SERVICE_URL = "http://recommendation";
-    private static final String REVIEW_SERVICE_URL = "http://review";
+  private static final String PRODUCT_SERVICE_URL = "http://product";
+  private static final String RECOMMENDATION_SERVICE_URL = "http://recommendation";
+  private static final String REVIEW_SERVICE_URL = "http://review";
 
-    private final Scheduler publishEventScheduler;
-    private final WebClient webClient;
-    private final ObjectMapper mapper;
-    private final StreamBridge streamBridge;
+  private final Scheduler publishEventScheduler;
+  private final WebClient webClient;
+  private final ObjectMapper mapper;
+  private final StreamBridge streamBridge;
 
-    private final ServiceUtil serviceUtil;
+  private final ServiceUtil serviceUtil;
 
-    public ProductCompositeIntegration(
-            @Qualifier("publishEventScheduler") Scheduler publishEventScheduler,
-            WebClient webClient,
-            ObjectMapper mapper,
-            StreamBridge streamBridge,
-            ServiceUtil serviceUtil
-    ) {
-        this.webClient = webClient;
+  public ProductCompositeIntegration(
+    @Qualifier("publishEventScheduler") Scheduler publishEventScheduler,
+    WebClient webClient,
+    ObjectMapper mapper,
+    StreamBridge streamBridge,
+    ServiceUtil serviceUtil
+  ) {
+    this.webClient = webClient;
 
-        this.publishEventScheduler = publishEventScheduler;
-        this.mapper = mapper;
-        this.streamBridge = streamBridge;
-        this.serviceUtil = serviceUtil;
+    this.publishEventScheduler = publishEventScheduler;
+    this.mapper = mapper;
+    this.streamBridge = streamBridge;
+    this.serviceUtil = serviceUtil;
+  }
+
+  @Override
+  public Mono<Product> createProduct(Product body) {
+
+    return Mono.fromCallable(() -> {
+      sendMessage("products-out-0", new Event<>(CREATE, body.getProductId(), body));
+      return body;
+    }).subscribeOn(publishEventScheduler);
+  }
+
+  @Override
+  @Retry(name = "product")
+  @TimeLimiter(name = "product")
+  @CircuitBreaker(name = "product", fallbackMethod = "getProductFallbackValue")
+  public Mono<Product> getProduct(HttpHeaders headers, int productId, int delay, int faultPercent) {
+
+    URI url = UriComponentsBuilder.fromUriString(PRODUCT_SERVICE_URL
+      + "/product/{productId}?delay={delay}&faultPercent={faultPercent}").build(productId, delay, faultPercent);
+    LOG.debug("Will call the getProduct API on URL: {}", url);
+
+    return webClient.get().uri(url)
+      .headers(h -> h.addAll(headers))
+      .retrieve().bodyToMono(Product.class).log(LOG.getName(), FINE)
+      .onErrorMap(WebClientResponseException.class, ex -> handleException(ex));
+  }
+
+  private Mono<Product> getProductFallbackValue(HttpHeaders headers, int productId, int delay, int faultPercent, CallNotPermittedException ex) {
+
+    LOG.warn("Creating a fail-fast fallback product for productId = {}, delay = {}, faultPercent = {} and exception = {} ",
+      productId, delay, faultPercent, ex.toString());
+
+    if (productId < 1) {
+      throw new InvalidInputException("Invalid productId: " + productId);
     }
 
-    @Override
-    public Mono<Product> createProduct(Product body) {
-
-        return Mono.fromCallable(() -> {
-            sendMessage("products-out-0", new Event<>(CREATE, body.getProductId(), body));
-            return body;
-        }).subscribeOn(publishEventScheduler);
+    if (productId == 13) {
+      String errMsg = "Product Id: " + productId + " not found in fallback cache!";
+      LOG.warn(errMsg);
+      throw new NotFoundException(errMsg);
     }
 
-    @Override
-    @Retry(name = "product")
-    @TimeLimiter(name = "product")
-    @CircuitBreaker(name = "product", fallbackMethod = "getProductFallbackValue")
-    public Mono<Product> getProduct(int productId, int delay, int faultPercent) {
+    return Mono.just(new Product(productId, "Fallback product" + productId, productId, serviceUtil.getServiceAddress()));
+  }
 
-        URI url = UriComponentsBuilder.fromUriString(PRODUCT_SERVICE_URL
-                + "/product/{productId}?delay={delay}&faultPercent={faultPercent}").build(productId, delay, faultPercent);
-        LOG.debug("Will call the getProduct API on URL: {}", url);
+  @Override
+  public Mono<Void> deleteProduct(int productId) {
 
-        return webClient.get().uri(url)
-                .retrieve().bodyToMono(Product.class).log(LOG.getName(), FINE)
-                .onErrorMap(WebClientResponseException.class, ex -> handleException(ex));
+    return Mono.fromRunnable(() -> sendMessage("products-out-0", new Event<>(DELETE, productId, null)))
+      .subscribeOn(publishEventScheduler).then();
+  }
+
+  @Override
+  public Mono<Recommendation> createRecommendation(Recommendation body) {
+
+    return Mono.fromCallable(() -> {
+      sendMessage("recommendations-out-0", new Event<>(CREATE, body.getProductId(), body));
+      return body;
+    }).subscribeOn(publishEventScheduler);
+  }
+
+  @Override
+  public Flux<Recommendation> getRecommendations(HttpHeaders headers, int productId) {
+
+    URI url = UriComponentsBuilder.fromUriString(RECOMMENDATION_SERVICE_URL + "/recommendation?productId={productId}").build(productId);
+
+    LOG.debug("Will call the getRecommendations API on URL: {}", url);
+
+    // Return an empty result if something goes wrong to make it possible for the composite service to return partial responses
+    return webClient.get().uri(url).headers(h -> h.addAll(headers)).retrieve().bodyToFlux(Recommendation.class).log(LOG.getName(), FINE).onErrorResume(error -> empty());
+  }
+
+  @Override
+  public Mono<Void> deleteRecommendations(int productId) {
+
+    return Mono.fromRunnable(() -> sendMessage("recommendations-out-0", new Event<>(DELETE, productId, null)))
+      .subscribeOn(publishEventScheduler).then();
+  }
+
+  @Override
+  public Mono<Review> createReview(Review body) {
+
+    return Mono.fromCallable(() -> {
+      sendMessage("reviews-out-0", new Event<>(CREATE, body.getProductId(), body));
+      return body;
+    }).subscribeOn(publishEventScheduler);
+  }
+
+  @Override
+  public Flux<Review> getReviews(HttpHeaders headers, int productId) {
+
+    URI url = UriComponentsBuilder.fromUriString(REVIEW_SERVICE_URL + "/review?productId={productId}").build(productId);
+
+    LOG.debug("Will call the getReviews API on URL: {}", url);
+
+    // Return an empty result if something goes wrong to make it possible for the composite service to return partial responses
+    return webClient.get().uri(url).headers(h -> h.addAll(headers)).retrieve().bodyToFlux(Review.class).log(LOG.getName(), FINE).onErrorResume(error -> empty());
+  }
+
+  @Override
+  public Mono<Void> deleteReviews(int productId) {
+
+    return Mono.fromRunnable(() -> sendMessage("reviews-out-0", new Event<>(DELETE, productId, null)))
+      .subscribeOn(publishEventScheduler).then();
+  }
+
+  private void sendMessage(String bindingName, Event event) {
+    LOG.debug("Sending a {} message to {}", event.getEventType(), bindingName);
+    Message message = MessageBuilder.withPayload(event)
+      .setHeader("partitionKey", event.getKey())
+      .build();
+    streamBridge.send(bindingName, message);
+  }
+
+  private Throwable handleException(Throwable ex) {
+
+    if (!(ex instanceof WebClientResponseException)) {
+      LOG.warn("Got a unexpected error: {}, will rethrow it", ex.toString());
+      return ex;
     }
 
-    private Mono<Product> getProductFallbackValue(int productId, int delay, int faultPercent, CallNotPermittedException ex) {
+    WebClientResponseException wcre = (WebClientResponseException)ex;
 
-        LOG.warn("Creating a fail-fast fallback product for productId = {}, delay = {}, faultPercent = {} and exception = {} ",
-                productId, delay, faultPercent, ex.toString());
+    switch (HttpStatus.resolve(wcre.getStatusCode().value())) {
 
-        if (productId == 13) {
-            String errMsg = "Product Id: " + productId + " not found in fallback cache!";
-            LOG.warn(errMsg);
-            throw new NotFoundException(errMsg);
-        }
+      case NOT_FOUND:
+        return new NotFoundException(getErrorMessage(wcre));
 
-        return Mono.just(new Product(productId, "Fallback product" + productId, productId, serviceUtil.getServiceAddress()));
+      case UNPROCESSABLE_ENTITY:
+        return new InvalidInputException(getErrorMessage(wcre));
+
+      default:
+        LOG.warn("Got an unexpected HTTP error: {}, will rethrow it", wcre.getStatusCode());
+        LOG.warn("Error body: {}", wcre.getResponseBodyAsString());
+        return ex;
     }
+  }
 
-    @Override
-    public Mono<Void> deleteProduct(int productId) {
-
-        return Mono.fromRunnable(() -> sendMessage("products-out-0", new Event<>(DELETE, productId, null)))
-                .subscribeOn(publishEventScheduler).then();
+  private String getErrorMessage(WebClientResponseException ex) {
+    try {
+      return mapper.readValue(ex.getResponseBodyAsString(), HttpErrorInfo.class).getMessage();
+    } catch (IOException ioex) {
+      return ex.getMessage();
     }
-
-    @Override
-    public Mono<Recommendation> createRecommendation(Recommendation body) {
-
-        return Mono.fromCallable(() -> {
-            sendMessage("recommendations-out-0", new Event<>(CREATE, body.getProductId(), body));
-            return body;
-        }).subscribeOn(publishEventScheduler);
-    }
-
-    @Override
-    public Flux<Recommendation> getRecommendations(int productId) {
-
-        URI url = UriComponentsBuilder.fromUriString(RECOMMENDATION_SERVICE_URL + "/recommendation?productId={productId}").build(productId);
-
-        LOG.debug("Will call the getRecommendations API on URL: {}", url);
-
-        // Return an empty result if something goes wrong to make it possible for the composite service to return partial responses
-        return webClient.get().uri(url).retrieve().bodyToFlux(Recommendation.class).log(LOG.getName(), FINE).onErrorResume(error -> empty());
-    }
-
-    @Override
-    public Mono<Void> deleteRecommendations(int productId) {
-
-        return Mono.fromRunnable(() -> sendMessage("recommendations-out-0", new Event<>(DELETE, productId, null)))
-                .subscribeOn(publishEventScheduler).then();
-    }
-
-    @Override
-    public Mono<Review> createReview(Review body) {
-
-        return Mono.fromCallable(() -> {
-            sendMessage("reviews-out-0", new Event<>(CREATE, body.getProductId(), body));
-            return body;
-        }).subscribeOn(publishEventScheduler);
-    }
-
-    @Override
-    public Flux<Review> getReviews(int productId) {
-
-        URI url = UriComponentsBuilder.fromUriString(REVIEW_SERVICE_URL + "/review?productId={productId}").build(productId);
-
-        LOG.debug("Will call the getReviews API on URL: {}", url);
-
-        // Return an empty result if something goes wrong to make it possible for the composite service to return partial responses
-        return webClient.get().uri(url).retrieve().bodyToFlux(Review.class).log(LOG.getName(), FINE).onErrorResume(error -> empty());
-    }
-
-    @Override
-    public Mono<Void> deleteReviews(int productId) {
-
-        return Mono.fromRunnable(() -> sendMessage("reviews-out-0", new Event<>(DELETE, productId, null)))
-                .subscribeOn(publishEventScheduler).then();
-    }
-
-    private void sendMessage(String bindingName, Event event) {
-        LOG.debug("Sending a {} message to {}", event.getEventType(), bindingName);
-        Message message = MessageBuilder.withPayload(event)
-                .setHeader("partitionKey", event.getKey())
-                .build();
-        streamBridge.send(bindingName, message);
-    }
-
-    private Throwable handleException(Throwable ex) {
-
-        if (!(ex instanceof WebClientResponseException)) {
-            LOG.warn("Got a unexpected error: {}, will rethrow it", ex.toString());
-            return ex;
-        }
-
-        WebClientResponseException wcre = (WebClientResponseException)ex;
-
-        switch (HttpStatus.resolve(wcre.getStatusCode().value())) {
-
-            case NOT_FOUND:
-                return new NotFoundException(getErrorMessage(wcre));
-
-            case UNPROCESSABLE_ENTITY:
-                return new InvalidInputException(getErrorMessage(wcre));
-
-            default:
-                LOG.warn("Got an unexpected HTTP error: {}, will rethrow it", wcre.getStatusCode());
-                LOG.warn("Error body: {}", wcre.getResponseBodyAsString());
-                return ex;
-        }
-    }
-
-    private String getErrorMessage(WebClientResponseException ex) {
-        try {
-            return mapper.readValue(ex.getResponseBodyAsString(), HttpErrorInfo.class).getMessage();
-        } catch (IOException ioex) {
-            return ex.getMessage();
-        }
-    }
+  }
 }

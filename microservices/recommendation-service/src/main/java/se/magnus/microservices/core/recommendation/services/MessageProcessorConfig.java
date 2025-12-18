@@ -13,41 +13,41 @@ import se.magnus.api.exceptions.EventProcessingException;
 @Configuration
 public class MessageProcessorConfig {
 
-    private static final Logger LOG = LoggerFactory.getLogger(MessageProcessorConfig.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MessageProcessorConfig.class);
 
-    private final RecommendationService recommendationService;
+  private final RecommendationService recommendationService;
 
-    public MessageProcessorConfig(RecommendationService recommendationService) {
-        this.recommendationService = recommendationService;
-    }
+  public MessageProcessorConfig(RecommendationService recommendationService) {
+    this.recommendationService = recommendationService;
+  }
 
-    @Bean
-    public Consumer<Event<Integer, Recommendation>> messageProcessor() {
-        return event -> {
+  @Bean
+  public Consumer<Event<Integer, Recommendation>> messageProcessor() {
+    return event -> {
 
-            LOG.info("Process message created at {}...", event.getEventCreatedAt());
+      LOG.info("Process message created at {}...", event.getEventCreatedAt());
 
-            switch (event.getEventType()) {
+      switch (event.getEventType()) {
 
-                case CREATE:
-                    Recommendation recommendation = event.getData();
-                    LOG.info("Create recommendation with ID: {}/{}", recommendation.getProductId(), recommendation.getRecommendationId());
-                    recommendationService.createRecommendation(recommendation).block();
-                    break;
+        case CREATE:
+          Recommendation recommendation = event.getData();
+          LOG.info("Create recommendation with ID: {}/{}", recommendation.getProductId(), recommendation.getRecommendationId());
+          recommendationService.createRecommendation(recommendation).block();
+          break;
 
-                case DELETE:
-                    int productId = event.getKey();
-                    LOG.info("Delete recommendations with ProductID: {}", productId);
-                    recommendationService.deleteRecommendations(productId).block();
-                    break;
+        case DELETE:
+          int productId = event.getKey();
+          LOG.info("Delete recommendations with ProductID: {}", productId);
+          recommendationService.deleteRecommendations(productId).block();
+          break;
 
-                default:
-                    String errorMessage = "Incorrect event type: " + event.getEventType() + ", expected a CREATE or DELETE event";
-                    LOG.warn(errorMessage);
-                    throw new EventProcessingException(errorMessage);
-            }
+        default:
+          String errorMessage = "Incorrect event type: " + event.getEventType() + ", expected a CREATE or DELETE event";
+          LOG.warn(errorMessage);
+          throw new EventProcessingException(errorMessage);
+      }
 
-            LOG.info("Message processing done!");
-        };
-    }
+      LOG.info("Message processing done!");
+    };
+  }
 }

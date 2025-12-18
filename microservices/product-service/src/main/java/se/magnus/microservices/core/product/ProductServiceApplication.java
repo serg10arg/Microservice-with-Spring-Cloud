@@ -23,27 +23,27 @@ import se.magnus.microservices.core.product.persistence.ProductEntity;
 @ComponentScan("se.magnus")
 public class ProductServiceApplication {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ProductServiceApplication.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ProductServiceApplication.class);
 
-    public static void main(String[] args) {
-        Hooks.enableAutomaticContextPropagation();
-        ConfigurableApplicationContext ctx = SpringApplication.run(ProductServiceApplication.class, args);
+  public static void main(String[] args) {
+    Hooks.enableAutomaticContextPropagation();
+    ConfigurableApplicationContext ctx = SpringApplication.run(ProductServiceApplication.class, args);
 
-        String mongodDbHost = ctx.getEnvironment().getProperty("spring.data.mongodb.host");
-        String mongodDbPort = ctx.getEnvironment().getProperty("spring.data.mongodb.port");
-        LOG.info("Connected to MongoDb: " + mongodDbHost + ":" + mongodDbPort);
-    }
+    String mongodDbHost = ctx.getEnvironment().getProperty("spring.data.mongodb.host");
+    String mongodDbPort = ctx.getEnvironment().getProperty("spring.data.mongodb.port");
+    LOG.info("Connected to MongoDb: " + mongodDbHost + ":" + mongodDbPort);
+  }
 
-    @Autowired
-    ReactiveMongoOperations mongoTemplate;
+  @Autowired
+  ReactiveMongoOperations mongoTemplate;
 
-    @EventListener(ContextRefreshedEvent.class)
-    public void initIndicesAfterStartup() {
+  @EventListener(ContextRefreshedEvent.class)
+  public void initIndicesAfterStartup() {
 
-        MappingContext<? extends MongoPersistentEntity<?>, MongoPersistentProperty> mappingContext = mongoTemplate.getConverter().getMappingContext();
-        IndexResolver resolver = new MongoPersistentEntityIndexResolver(mappingContext);
+    MappingContext<? extends MongoPersistentEntity<?>, MongoPersistentProperty> mappingContext = mongoTemplate.getConverter().getMappingContext();
+    IndexResolver resolver = new MongoPersistentEntityIndexResolver(mappingContext);
 
-        ReactiveIndexOperations indexOps = mongoTemplate.indexOps(ProductEntity.class);
-        resolver.resolveIndexFor(ProductEntity.class).forEach(e -> indexOps.createIndex(e).block());
-    }
+    ReactiveIndexOperations indexOps = mongoTemplate.indexOps(ProductEntity.class);
+    resolver.resolveIndexFor(ProductEntity.class).forEach(e -> indexOps.createIndex(e).block());
+  }
 }

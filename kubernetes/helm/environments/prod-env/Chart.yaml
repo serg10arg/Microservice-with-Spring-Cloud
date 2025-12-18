@@ -10,14 +10,6 @@ dependencies:
     version: 1.0.0
     repository: file://../../common
 
-  - name: config-server
-    version: 1.0.0
-    repository: file://../../components/config-server
-
-  - name: gateway
-    version: 1.0.0
-    repository: file://../../components/gateway
-
   - name: auth-server
     version: 1.0.0
     repository: file://../../components/auth-server
@@ -38,6 +30,14 @@ dependencies:
     version: 1.0.0
     repository: file://../../components/product-composite
 
-  - name: zipkin-server
+  - name: product-green
     version: 1.0.0
-    repository: file://../../components/zipkin-server
+    repository: file://../../components/product-green
+
+  - name: recommendation-green
+    version: 1.0.0
+    repository: file://../../components/recommendation-green
+
+  - name: review-green
+    version: 1.0.0
+    repository: file://../../components/review-green

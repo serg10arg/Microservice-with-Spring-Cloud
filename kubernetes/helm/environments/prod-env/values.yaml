@@ -1,41 +1,17 @@
 secrets:
 
-  config-server-secrets:
-    ENCRYPT_KEY: my-very-secure-encrypt-key
-    SPRING_SECURITY_USER_NAME: prod-usr
-    SPRING_SECURITY_USER_PASSWORD: prod-pwd
+  rabbitmq-credentials:
+    SPRING_RABBITMQ_USERNAME: rabbit-user-prod
+    SPRING_RABBITMQ_PASSWORD: rabbit-pwd-prod
 
-  config-client-credentials:
-    CONFIG_SERVER_USR: prod-usr
-    CONFIG_SERVER_PWD: prod-pwd
-    SPRING_CLOUD_CONFIG_URI: http://config-server:8888
+  mongodb-credentials:
+    SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE: admin
+    SPRING_DATA_MONGODB_USERNAME: mongodb-user-prod
+    SPRING_DATA_MONGODB_PASSWORD: mongodb-pwd-prod
 
-config-server:
-  image:
-    tag: v1
-  env:
-    LOGGING_LEVEL_ROOT: WARN
-    MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info"
-  envFromSecretRefs:
-    - config-server-secrets
-  resources:
-    requests:
-      memory: 200Mi
-    limits:
-      memory: 400Mi
-
-gateway:
-  image:
-    tag: v1
-  env:
-    SPRING_PROFILES_ACTIVE: "docker,prod"
-  envFromSecretRefs:
-    - config-client-credentials
-  resources:
-    requests:
-      memory: 200Mi
-    limits:
-      memory: 400Mi
+  mysql-credentials:
+    SPRING_DATASOURCE_USERNAME: mysql-user-prod
+    SPRING_DATASOURCE_PASSWORD: mysql-pwd-prod
 
 auth-server:
   image:
@@ -43,7 +19,7 @@ auth-server:
   env:
     SPRING_PROFILES_ACTIVE: "docker,prod"
   envFromSecretRefs:
-    - config-client-credentials
+    - rabbitmq-credentials
   resources:
     requests:
       memory: 200Mi
@@ -51,12 +27,14 @@ auth-server:
       memory: 400Mi
 
 product:
+  fullnameOverride: product-v1
   image:
     tag: v1
   env:
     SPRING_PROFILES_ACTIVE: "docker,prod"
   envFromSecretRefs:
-    - config-client-credentials
+    - rabbitmq-credentials
+    - mongodb-credentials
   resources:
     requests:
       memory: 200Mi
@@ -64,12 +42,14 @@ product:
       memory: 400Mi
 
 recommendation:
+  fullnameOverride: recommendation-v1
   image:
     tag: v1
   env:
     SPRING_PROFILES_ACTIVE: "docker,prod"
   envFromSecretRefs:
-    - config-client-credentials
+    - rabbitmq-credentials
+    - mongodb-credentials
   resources:
     requests:
       memory: 200Mi
@@ -77,12 +57,14 @@ recommendation:
       memory: 400Mi
 
 review:
+  fullnameOverride: review-v1
   image:
     tag: v1
   env:
     SPRING_PROFILES_ACTIVE: "docker,prod"
   envFromSecretRefs:
-    - config-client-credentials
+    - rabbitmq-credentials
+    - mysql-credentials
   resources:
     requests:
       memory: 200Mi
@@ -95,18 +77,87 @@ product-composite:
   env:
     SPRING_PROFILES_ACTIVE: "docker,prod"
   envFromSecretRefs:
-    - config-client-credentials
+    - rabbitmq-credentials
   resources:
     requests:
       memory: 200Mi
     limits:
       memory: 400Mi
 
-zipkin-server:
+product-green:
+  fullnameOverride: product-v2
+  image:
+    tag: v2
   env:
-    LOGGING_LEVEL_ROOT: WARN
+    SPRING_PROFILES_ACTIVE: "docker,prod"
+  envFromSecretRefs:
+    - rabbitmq-credentials
+    - mongodb-credentials
   resources:
     requests:
-      memory: 300Mi
+      memory: 200Mi
     limits:
-      memory: 600Mi
+      memory: 400Mi
+
+recommendation-green:
+  fullnameOverride: recommendation-v2
+  image:
+    tag: v2
+  env:
+    SPRING_PROFILES_ACTIVE: "docker,prod"
+  envFromSecretRefs:
+    - rabbitmq-credentials
+    - mongodb-credentials
+  resources:
+    requests:
+      memory: 200Mi
+    limits:
+      memory: 400Mi
+
+review-green:
+  fullnameOverride: review-v2
+  image:
+    tag: v2
+  env:
+    SPRING_PROFILES_ACTIVE: "docker,prod"
+  envFromSecretRefs:
+    - rabbitmq-credentials
+    - mysql-credentials
+  resources:
+    requests:
+      memory: 200Mi
+    limits:
+      memory: 400Mi
+
+virtualServices:
+  - product
+  - recommendation
+  - review
+
+destinationRules:
+  - name: product-composite
+  - name: auth-server
+  - name: product
+    subsets:
+    - labels:
+        version: v1
+      name: old
+    - labels:
+        version: v2
+      name: new
+  - name: recommendation
+    subsets:
+    - labels:
+        version: v1
+      name: old
+    - labels:
+        version: v2
+      name: new
+  - name: review
+    subsets:
+    - labels:
+        version: v1
+      name: old
+    - labels:
+        version: v2
+      name: new

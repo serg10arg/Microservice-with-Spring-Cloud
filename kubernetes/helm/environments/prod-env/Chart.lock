@@ -2,12 +2,6 @@ dependencies:
 - name: common
   repository: file://../../common
   version: 1.0.0
-- name: config-server
-  repository: file://../../components/config-server
-  version: 1.0.0
-- name: gateway
-  repository: file://../../components/gateway
-  version: 1.0.0
 - name: auth-server
   repository: file://../../components/auth-server
   version: 1.0.0
@@ -23,8 +17,14 @@ dependencies:
 - name: product-composite
   repository: file://../../components/product-composite
   version: 1.0.0
-- name: zipkin-server
-  repository: file://../../components/zipkin-server
+- name: product-green
+  repository: file://../../components/product-green
   version: 1.0.0
-digest: sha256:ab7a7952dfed4259c4a6c1e54f210c9b4a4374b8bde1b501b9013f0bad1818af
-generated: "2021-04-29T13:45:33.879089+02:00"
+- name: recommendation-green
+  repository: file://../../components/recommendation-green
+  version: 1.0.0
+- name: review-green
+  repository: file://../../components/review-green
+  version: 1.0.0
+digest: sha256:0c163029f735163977594526cca6fc76b22cd81f74aff5e3e526c2443b46ad06
+generated: "2021-05-13T07:25:14.83198+02:00"

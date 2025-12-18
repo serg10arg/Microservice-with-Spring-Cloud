@@ -15,35 +15,35 @@ import reactor.core.publisher.Mono;
 @Configuration
 public class HealthCheckConfiguration {
 
-    private static final Logger LOG = LoggerFactory.getLogger(HealthCheckConfiguration.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HealthCheckConfiguration.class);
 
-    private WebClient webClient;
+  private WebClient webClient;
 
-    public HealthCheckConfiguration(WebClient.Builder webClientBuilder) {
-        this.webClient = webClientBuilder.build();
-    }
+  public HealthCheckConfiguration(WebClient.Builder webClientBuilder) {
+    this.webClient = webClientBuilder.build();
+  }
 
-    @Bean
-    ReactiveHealthContributor healthcheckMicroservices() {
+  @Bean
+  ReactiveHealthContributor healthcheckMicroservices() {
 
-        final Map<String, ReactiveHealthIndicator> registry = new LinkedHashMap<>();
+    final Map<String, ReactiveHealthIndicator> registry = new LinkedHashMap<>();
 
-        registry.put("product",           () -> getHealth("http://product"));
-        registry.put("recommendation",    () -> getHealth("http://recommendation"));
-        registry.put("review",            () -> getHealth("http://review"));
-        registry.put("product-composite", () -> getHealth("http://product-composite"));
-        registry.put("auth-server",       () -> getHealth("http://auth-server"));
+    registry.put("product",           () -> getHealth("http://product:4004"));
+    registry.put("recommendation",    () -> getHealth("http://recommendation:4004"));
+    registry.put("review",            () -> getHealth("http://review:4004"));
+    registry.put("product-composite", () -> getHealth("http://product-composite:4004"));
+    registry.put("auth-server",       () -> getHealth("http://auth-server:4004"));
 
-        return CompositeReactiveHealthContributor.fromMap(registry);
-    }
+    return CompositeReactiveHealthContributor.fromMap(registry);
+  }
 
-    private Mono<Health> getHealth(String baseUrl) {
-        String url = baseUrl + "/actuator/health";
-        LOG.debug("Setting up a call to the Health API on URL: {}", url);
-        return webClient.get().uri(url).retrieve().bodyToMono(String.class)
-                .map(s -> new Health.Builder().up().build())
-                .onErrorResume(ex -> Mono.just(new Health.Builder().down(ex).build()))
-                .log(LOG.getName(), FINE);
-    }
+  private Mono<Health> getHealth(String baseUrl) {
+    String url = baseUrl + "/actuator/health";
+    LOG.debug("Setting up a call to the Health API on URL: {}", url);
+    return webClient.get().uri(url).retrieve().bodyToMono(String.class)
+      .map(s -> new Health.Builder().up().build())
+      .onErrorResume(ex -> Mono.just(new Health.Builder().down(ex).build()))
+      .log(LOG.getName(), FINE);
+  }
 
 }

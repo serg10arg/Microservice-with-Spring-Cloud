@@ -16,69 +16,69 @@ import se.magnus.api.event.Event;
 
 public class IsSameEvent extends TypeSafeMatcher<String> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(IsSameEvent.class);
+  private static final Logger LOG = LoggerFactory.getLogger(IsSameEvent.class);
 
-    private ObjectMapper mapper = new ObjectMapper();
+  private ObjectMapper mapper = new ObjectMapper();
 
-    private Event expectedEvent;
+  private Event expectedEvent;
 
 
-    private IsSameEvent(Event expectedEvent) {
-        this.expectedEvent = expectedEvent;
+  private IsSameEvent(Event expectedEvent) {
+    this.expectedEvent = expectedEvent;
+  }
+
+  @Override
+  protected boolean matchesSafely(String eventAsJson) {
+
+    if (expectedEvent == null) {
+      return false;
     }
 
-    @Override
-    protected boolean matchesSafely(String eventAsJson) {
+    LOG.trace("Convert the following json string to a map: {}", eventAsJson);
+    Map mapEvent = convertJsonStringToMap(eventAsJson);
+    mapEvent.remove("eventCreatedAt");
 
-        if (expectedEvent == null) {
-            return false;
-        }
+    Map mapExpectedEvent = getMapWithoutCreatedAt(expectedEvent);
 
-        LOG.trace("Convert the following json string to a map: {}", eventAsJson);
-        Map mapEvent = convertJsonStringToMap(eventAsJson);
-        mapEvent.remove("eventCreatedAt");
+    LOG.trace("Got the map: {}", mapEvent);
+    LOG.trace("Compare to the expected map: {}", mapExpectedEvent);
+    return mapEvent.equals(mapExpectedEvent);
+  }
 
-        Map mapExpectedEvent = getMapWithoutCreatedAt(expectedEvent);
+  @Override
+  public void describeTo(Description description) {
+    String expectedJson = convertObjectToJsonString(expectedEvent);
+    description.appendText("expected to look like " + expectedJson);
+  }
 
-        LOG.trace("Got the map: {}", mapEvent);
-        LOG.trace("Compare to the expected map: {}", mapExpectedEvent);
-        return mapEvent.equals(mapExpectedEvent);
+  public static Matcher<String> sameEventExceptCreatedAt(Event expectedEvent) {
+    return new IsSameEvent(expectedEvent);
+  }
+
+  private Map getMapWithoutCreatedAt(Event event) {
+    Map mapEvent = convertObjectToMap(event);
+    mapEvent.remove("eventCreatedAt");
+    return mapEvent;
+  }
+
+  private Map convertObjectToMap(Object object) {
+    JsonNode node = mapper.convertValue(object, JsonNode.class);
+    return mapper.convertValue(node, Map.class);
+  }
+
+  private String convertObjectToJsonString(Object object) {
+    try {
+      return mapper.writeValueAsString(object);
+    } catch (JsonProcessingException e) {
+      throw new RuntimeException(e);
     }
+  }
 
-    @Override
-    public void describeTo(Description description) {
-        String expectedJson = convertObjectToJsonString(expectedEvent);
-        description.appendText("expected to look like " + expectedJson);
+  private Map convertJsonStringToMap(String eventAsJson) {
+    try {
+      return mapper.readValue(eventAsJson, new TypeReference<HashMap>(){});
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
-
-    public static Matcher<String> sameEventExceptCreatedAt(Event expectedEvent) {
-        return new IsSameEvent(expectedEvent);
-    }
-
-    private Map getMapWithoutCreatedAt(Event event) {
-        Map mapEvent = convertObjectToMap(event);
-        mapEvent.remove("eventCreatedAt");
-        return mapEvent;
-    }
-
-    private Map convertObjectToMap(Object object) {
-        JsonNode node = mapper.convertValue(object, JsonNode.class);
-        return mapper.convertValue(node, Map.class);
-    }
-
-    private String convertObjectToJsonString(Object object) {
-        try {
-            return mapper.writeValueAsString(object);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private Map convertJsonStringToMap(String eventAsJson) {
-        try {
-            return mapper.readValue(eventAsJson, new TypeReference<HashMap>(){});
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
+  }
 }

@@ -8,15 +8,14 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class ObservationRegistryConfig implements ObservationRegistryCustomizer<ObservationRegistry> {
 
-    private final BuildProperties buildProperties;
+  private final BuildProperties buildProperties;
 
-    public ObservationRegistryConfig(BuildProperties buildProperties) {
+  public ObservationRegistryConfig(BuildProperties buildProperties) {
+    this.buildProperties = buildProperties;
+  }
 
-        this.buildProperties = buildProperties;
-    }
-
-    @Override
-    public void customize(final ObservationRegistry registry) {
-        registry.observationConfig().observationFilter(new BuildInfoObservationFilter(buildProperties));
-    }
+  @Override
+  public void customize(final ObservationRegistry registry) {
+    registry.observationConfig().observationFilter(new BuildInfoObservationFilter(buildProperties));
+  }
 }

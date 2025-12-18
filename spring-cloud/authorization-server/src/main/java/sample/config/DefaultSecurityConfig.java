@@ -38,33 +38,33 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class DefaultSecurityConfig {
 
-    private static final Logger LOG = LoggerFactory.getLogger(DefaultSecurityConfig.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DefaultSecurityConfig.class);
 
-    // formatter:off
-    @Bean
-    SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .authorizeHttpRequests(authorizeRequests -> authorizeRequests
-                        .requestMatchers("/actuator/**").permitAll()
-                        .anyRequest().authenticated()
-                )
-                .formLogin(withDefaults());
-        return http.build();
-    }
-    // formatter:on
+  // formatter:off
+  @Bean
+  SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
+    http
+      .authorizeHttpRequests(authorizeRequests -> authorizeRequests
+        .requestMatchers("/actuator/**").permitAll()
+        .anyRequest().authenticated()
+      )
+      .formLogin(withDefaults());
+    return http.build();
+  }
+  // formatter:on
 
-    // @formatter:off
-    @Bean
-    UserDetailsService users() {
-        @SuppressWarnings("deprecation") // Ok for test purposes, not for production use
-        UserDetails user = User.withDefaultPasswordEncoder()
-                .username("u")
-                .password("p")
-                .roles("USER")
-                .build();
-        return new InMemoryUserDetailsManager(user);
-    }
-    // @formatter:on
+  // @formatter:off
+  @Bean
+  UserDetailsService users() {
+    @SuppressWarnings("deprecation") // Ok for test purposes, not for production use
+    UserDetails user = User.withDefaultPasswordEncoder()
+      .username("u")
+      .password("p")
+      .roles("USER")
+      .build();
+    return new InMemoryUserDetailsManager(user);
+  }
+  // @formatter:on
 
 }
 //CHECKSTYLE:ON

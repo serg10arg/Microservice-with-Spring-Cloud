@@ -13,41 +13,41 @@ import se.magnus.api.exceptions.EventProcessingException;
 @Configuration
 public class MessageProcessorConfig {
 
-    private static final Logger LOG = LoggerFactory.getLogger(MessageProcessorConfig.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MessageProcessorConfig.class);
 
-    private final ProductService productService;
+  private final ProductService productService;
 
-    public MessageProcessorConfig(ProductService productService) {
-        this.productService = productService;
-    }
+  public MessageProcessorConfig(ProductService productService) {
+    this.productService = productService;
+  }
 
-    @Bean
-    public Consumer<Event<Integer, Product>> messageProcessor() {
-        return event -> {
-            LOG.info("Process message created at {}...", event.getEventCreatedAt());
+  @Bean
+  public Consumer<Event<Integer, Product>> messageProcessor() {
+    return event -> {
+      LOG.info("Process message created at {}...", event.getEventCreatedAt());
 
-            switch (event.getEventType()) {
+      switch (event.getEventType()) {
 
-                case CREATE:
-                    Product product = event.getData();
-                    LOG.info("Create product with ID: {}", product.getProductId());
-                    productService.createProduct(product).block();
-                    break;
+        case CREATE:
+          Product product = event.getData();
+          LOG.info("Create product with ID: {}", product.getProductId());
+          productService.createProduct(product).block();
+          break;
 
-                case DELETE:
-                    int productId = event.getKey();
-                    LOG.info("Delete product with ProductID: {}", productId);
-                    productService.deleteProduct(productId).block();
-                    break;
+        case DELETE:
+          int productId = event.getKey();
+          LOG.info("Delete product with ProductID: {}", productId);
+          productService.deleteProduct(productId).block();
+          break;
 
-                default:
-                    String errorMessage = "Incorrect event type: " + event.getEventType() + ", expected a CREATE or DELETE event";
-                    LOG.warn(errorMessage);
-                    throw new EventProcessingException(errorMessage);
-            }
+        default:
+          String errorMessage = "Incorrect event type: " + event.getEventType() + ", expected a CREATE or DELETE event";
+          LOG.warn(errorMessage);
+          throw new EventProcessingException(errorMessage);
+      }
 
-            LOG.info("Message processing done!");
+      LOG.info("Message processing done!");
 
-        };
-    }
+    };
+  }
 }

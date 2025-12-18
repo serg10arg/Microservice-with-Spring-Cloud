@@ -16,30 +16,30 @@ import reactor.core.scheduler.Schedulers;
 @ComponentScan("se.magnus")
 public class ReviewServiceApplication {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ReviewServiceApplication.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ReviewServiceApplication.class);
 
-    private final Integer threadPoolSize;
-    private final Integer taskQueueSize;
+  private final Integer threadPoolSize;
+  private final Integer taskQueueSize;
 
-    public ReviewServiceApplication(
-            @Value("${app.threadPoolSize:10}") Integer threadPoolSize,
-            @Value("${app.taskQueueSize:100}") Integer taskQueueSize
-    ) {
-        this.threadPoolSize = threadPoolSize;
-        this.taskQueueSize = taskQueueSize;
-    }
+  public ReviewServiceApplication(
+    @Value("${app.threadPoolSize:10}") Integer threadPoolSize,
+    @Value("${app.taskQueueSize:100}") Integer taskQueueSize
+  ) {
+    this.threadPoolSize = threadPoolSize;
+    this.taskQueueSize = taskQueueSize;
+  }
 
-    @Bean
-    public Scheduler jdbcScheduler() {
-        LOG.info("Creates a jdbcScheduler with thread pool size = {}", threadPoolSize);
-        return Schedulers.newBoundedElastic(threadPoolSize, taskQueueSize, "jdbc-pool");
-    }
+  @Bean
+  public Scheduler jdbcScheduler() {
+    LOG.info("Creates a jdbcScheduler with thread pool size = {}", threadPoolSize);
+    return Schedulers.newBoundedElastic(threadPoolSize, taskQueueSize, "jdbc-pool");
+  }
 
-    public static void main(String[] args) {
-        Hooks.enableAutomaticContextPropagation();
-        ConfigurableApplicationContext ctx = SpringApplication.run(ReviewServiceApplication.class, args);
+  public static void main(String[] args) {
+    Hooks.enableAutomaticContextPropagation();
+    ConfigurableApplicationContext ctx = SpringApplication.run(ReviewServiceApplication.class, args);
 
-        String mysqlUri = ctx.getEnvironment().getProperty("spring.datasource.url");
-        LOG.info("Connected to MySQL: " + mysqlUri);
-    }
+    String mysqlUri = ctx.getEnvironment().getProperty("spring.datasource.url");
+    LOG.info("Connected to MySQL: " + mysqlUri);
+  }
 }
